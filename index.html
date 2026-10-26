@@ -43,6 +43,37 @@
   .done { text-align:center; padding:60px 10px; }
   .done .big { font-size:48px; }
   .done h1 { margin-top:10px; }
+  /* 결과 화면 */
+  main.wide { max-width:1080px; }
+  .rs-top { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .rs-top .tools { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn { border:1px solid var(--line); background:#fff; border-radius:10px; padding:8px 12px; font:inherit; font-size:13.5px; cursor:pointer; }
+  .btn.dark { background:var(--ink); color:#fff; border-color:var(--ink); }
+  select.btn { padding:7px 10px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:14px 0; }
+  .kpi { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .kpi b { display:block; font-size:26px; } .kpi span { color:var(--sub); font-size:12.5px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:18px; margin:12px 0; }
+  .card h3 { margin:0 0 12px; font-size:15.5px; }
+  .avg { display:grid; grid-template-columns:minmax(120px,240px) 1fr 52px; gap:6px 10px; align-items:center; font-size:13.5px; }
+  .avg .track { height:12px; background:#f1eee8; border-radius:6px; overflow:hidden; }
+  .avg .track i { display:block; height:100%; background:var(--acc); border-radius:6px; }
+  .avg .n { font-variant-numeric:tabular-nums; font-weight:700; text-align:right; }
+  .dist { display:flex; height:10px; border-radius:5px; overflow:hidden; margin:2px 0 8px; grid-column:2 / 4; }
+  .dist i { display:block; height:100%; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; font-size:12px; color:var(--sub); margin-top:8px; }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px; }
+  .teams { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .teams td, .teams th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; }
+  .teams th { color:var(--sub); font-weight:600; font-size:12.5px; }
+  .ans { list-style:none; padding:0; margin:0; }
+  .ans li { padding:10px 0; border-top:1px solid var(--line); font-size:14px; white-space:pre-wrap; }
+  .ans li:first-child { border-top:0; }
+  .ans .who { color:var(--sub); font-size:12px; display:block; margin-bottom:2px; white-space:normal; }
+  details.card > summary { cursor:pointer; font-weight:700; font-size:15px; list-style:none; }
+  details.card > summary::after { content:' ▾'; color:var(--sub); }
+  details.card[open] > summary { margin-bottom:10px; }
+  .login { max-width:380px; margin:60px auto; }
   .demo { background:#fff6d6; border:1px solid #f0d77a; border-radius:10px; padding:8px 12px; font-size:13px; margin-bottom:12px; }
   .progress { position:sticky; top:0; z-index:5; height:4px; background:var(--line); margin:0 -16px 18px; }
   .progress i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
@@ -217,7 +248,118 @@ function renderDone(already) {
   const a = $('#again'); if (a) a.addEventListener('click', e => { e.preventDefault(); try { localStorage.removeItem(DONE_KEY); } catch {} render(); });
 }
 
-render();
+// ── 결과 화면 (#/results) — 비밀번호(Apps Script 스크립트 속성 RESULTS_KEY)로만 열림 ──
+// 팀 인원: 경영팀 프로그램 설정의 팀별 예상 인원(10/26)
+const TEAM_SIZE = { 'GULGANG': 9, '미뇽맨션': 4, '바쏠': 3, '휴그': 5, '퓌라': 5, '그로스팀': 6, '경영팀': 4, '구매팀': 7, '발주팀': 2, 'CEO실': 2 };
+const KEY_STORE = 'wsv_results_key';
+const RS = { rows: [], at: '', team: '' };
+const sget = k => { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } };
+const sset = (k, v) => { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch {} };
+
+function scoreQuestions() {
+  const out = [];
+  for (const q of QUESTIONS) {
+    if (q.type === 'scale') out.push({ id: q.id, title: q.title, labels: q.labels });
+    if (q.type === 'matrix') q.rows.forEach(([rid, t]) => out.push({ id: rid, title: (q.id === 'hk_parts' ? '해커톤 · ' : '') + t, labels: SCALE5 }));
+  }
+  return out;
+}
+
+async function loadResults(key) {
+  if (DEMO) { RS.rows = JSON.parse(store.get('wsv_demo') || '[]'); RS.at = new Date().toISOString(); return; }
+  const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'results', key }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow' });
+  const j = JSON.parse(await r.text());
+  if (!j.ok) throw new Error(j.error || '불러오지 못했어요');
+  RS.rows = j.rows; RS.at = j.at;
+}
+
+function renderLogin(err) {
+  $('#app').innerHTML = (DEMO ? '<div class="demo">미리보기 모드 — 이 브라우저에 저장된 응답으로 보여요. 비밀번호는 아무거나.</div>' : '') +
+    `<div class="login"><div class="eyebrow">EGOIDSM WORKSHOP 2026</div><h1>설문 결과</h1><p class="lead">결과 비밀번호를 넣어 주세요. 실명 응답이라 HR만 봐요.</p>
+    <input type="password" class="txt" id="pw" placeholder="비밀번호"><button class="submit" id="go">열기</button><div class="msg">${esc(err || '')}</div></div>`;
+  const go = async () => {
+    const k = $('#pw').value.trim(); if (!k && !DEMO) return;
+    $('#go').disabled = true; $('#go').textContent = '불러오는 중…';
+    try { await loadResults(k); sset(KEY_STORE, k || 'demo'); renderResults(); }
+    catch (e) { sset(KEY_STORE, ''); renderLogin(e.message); }
+  };
+  $('#go').addEventListener('click', go);
+  $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  $('#pw').focus();
+}
+
+function renderResults() {
+  document.querySelector('main').classList.add('wide');
+  const rows = RS.team ? RS.rows.filter(r => r.dept === RS.team) : RS.rows;
+  const n = rows.length;
+  const total = Object.values(TEAM_SIZE).reduce((a, b) => a + b, 0);
+  const avgOf = id => { const v = rows.map(r => +r[id]).filter(x => x >= 1 && x <= 5); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const fmt = v => v == null ? '—' : v.toFixed(2);
+  const COLORS = ['#d33a2c', '#f0a36b', '#d9d4cc', '#9fc59b', '#2e8b57'];
+  const qs = scoreQuestions();
+  const scoreRows = qs.map(q => {
+    const a = avgOf(q.id);
+    const cnt = [1, 2, 3, 4, 5].map(s => rows.filter(r => +r[q.id] === s).length);
+    const sum = cnt.reduce((x, y) => x + y, 0) || 1;
+    return `<div>${esc(q.title)}</div><div class="track"><i style="width:${a ? (a / 5 * 100).toFixed(1) : 0}%"></i></div><div class="n">${fmt(a)}</div>` +
+      `<div class="dist">${cnt.map((c, i) => c ? `<i style="width:${(c / sum * 100).toFixed(1)}%;background:${COLORS[i]}" title="${i + 1}점 ${c}명"></i>` : '').join('')}</div>`;
+  }).join('');
+  const legend = '<div class="legend">' + SCALE5.map((l, i) => `<span><i style="background:${COLORS[i]}"></i>${i + 1} ${esc(l)}</span>`).join('') + '<span>막대 = 평균(5점 만점) · 아래 띠 = 점수별 사람 수 비율</span></div>';
+  const teamRows = Object.entries(TEAM_SIZE).map(([t, sz]) => {
+    const tr = RS.rows.filter(r => r.dept === t);
+    const a = tr.map(r => +r.overall).filter(x => x); const h = tr.map(r => +r.hk_overall).filter(x => x);
+    const m = v => v.length ? (v.reduce((x, y) => x + y, 0) / v.length).toFixed(2) : '—';
+    return `<tr><td>${esc(t)}</td><td>${tr.length} / ${sz}</td><td>${m(a)}</td><td>${m(h)}</td><td>${tr.map(r => esc(r.name)).join(', ')}</td></tr>`;
+  }).join('');
+  const tools = (QUESTIONS.find(q => q.id === 'hk_tools_used') || { options: [] }).options.map(o => [o, rows.filter(r => String(r.hk_tools_used || '').split(' | ').includes(o)).length]).sort((a, b) => b[1] - a[1]);
+  const toolMax = Math.max(1, ...tools.map(t => t[1]));
+  const texts = QUESTIONS.filter(q => q.type === 'text').map(q => {
+    const list = rows.filter(r => String(r[q.id] || '').trim());
+    return `<details class="card"${list.length ? '' : ''}><summary>${esc(q.title)} <span style="color:var(--sub);font-weight:500">(${list.length})</span></summary><ul class="ans">` +
+      list.map(r => `<li><span class="who">${esc(r.name)} · ${esc(r.dept || '팀 미선택')}</span>${esc(r[q.id])}</li>`).join('') + '</ul></details>';
+  }).join('');
+  const at = RS.at ? new Date(RS.at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '';
+  $('#app').innerHTML = (DEMO ? '<div class="demo">미리보기 모드 — 이 브라우저에 저장된 응답이에요.</div>' : '') +
+    `<div class="rs-top"><div><div class="eyebrow">EGOIDSM WORKSHOP 2026</div><h1 style="margin:4px 0">설문 결과</h1><div class="hint" style="color:var(--sub);font-size:13px">${esc(at)} 기준 · 실명 응답 — 화면 공유·캡처 주의</div></div>
+    <div class="tools"><select class="btn" id="team"><option value="">전체 팀</option>${Object.keys(TEAM_SIZE).map(t => `<option${t === RS.team ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
+    <button class="btn" id="reload">새로 고침</button><button class="btn" id="csv">CSV 받기</button><button class="btn" id="out">나가기</button></div></div>
+    <div class="kpis">
+      <div class="kpi"><b>${n}${RS.team ? ' / ' + TEAM_SIZE[RS.team] : ' / ' + total}</b><span>응답 / 인원 (${total ? Math.round(n / (RS.team ? TEAM_SIZE[RS.team] : total) * 100) : 0}%)</span></div>
+      <div class="kpi"><b>${fmt(avgOf('overall'))}</b><span>워크숍 전체 만족도</span></div>
+      <div class="kpi"><b>${fmt(avgOf('align'))}</b><span>목표가 더 분명해짐</span></div>
+      <div class="kpi"><b>${fmt(avgOf('hk_overall'))}</b><span>AX 해커톤 만족도</span></div>
+      <div class="kpi"><b>${fmt(avgOf('hk_ai'))}</b><span>업무에 AI 더 쓸 것 같음</span></div>
+    </div>
+    <div class="card"><h3>점수 문항 (평균 · 5점 만점)</h3><div class="avg">${scoreRows}</div>${legend}</div>
+    ${RS.team ? '' : `<div class="card"><h3>팀별 응답</h3><table class="teams"><tr><th>팀</th><th>응답 / 인원</th><th>워크숍 만족도</th><th>해커톤 만족도</th><th>응답한 사람</th></tr>${teamRows}</table></div>`}
+    <div class="card"><h3>해커톤에서 쓴 AI 툴 (여러 개 선택)</h3><div class="avg">${tools.map(([t, c]) => `<div>${esc(t)}</div><div class="track"><i style="width:${(c / toolMax * 100).toFixed(1)}%"></i></div><div class="n">${c}명</div>`).join('')}</div></div>
+    <h3 style="margin:24px 0 4px">주관식 응답 (눌러서 펼치기)</h3>${texts}`;
+  $('#team').addEventListener('change', e => { RS.team = e.target.value; renderResults(); });
+  $('#reload').addEventListener('click', async () => { try { await loadResults(sget(KEY_STORE)); renderResults(); } catch (e) { renderLogin(e.message); } });
+  $('#out').addEventListener('click', () => { sset(KEY_STORE, ''); RS.rows = []; location.hash = ''; location.reload(); });
+  $('#csv').addEventListener('click', downloadCsv);
+}
+
+function downloadCsv() {
+  const cols = ['submittedAt', 'name', 'dept'];
+  for (const q of QUESTIONS) { if (q.id === 'name' || q.id === 'dept') continue; if (q.type === 'matrix') q.rows.forEach(r => cols.push(r[0])); else cols.push(q.id); }
+  const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = '﻿' + [cols.join(',')].concat(RS.rows.map(r => cols.map(c => cell(r[c] ?? r.at)).join(','))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = '워크숍_만족도_설문_결과.csv'; a.click();
+}
+
+async function route() {
+  if (location.hash.startsWith('#/results')) {
+    const k = sget(KEY_STORE);
+    if (!k) return renderLogin();
+    try { await loadResults(k); renderResults(); } catch (e) { sset(KEY_STORE, ''); renderLogin(e.message); }
+    return;
+  }
+  render();
+}
+route();
 </script>
 </body>
 </html>
