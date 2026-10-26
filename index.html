@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2026 에고이즘 워크숍 만족도 설문</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root { --bg:#f6f4f0; --card:#fff; --ink:#1d1d1f; --sub:#6b6b70; --line:#e6e2db; --acc:#e8711e; --acc-soft:#fdf0e6; --err:#d33a2c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:Pretendard,'Malgun Gothic',system-ui,sans-serif; line-height:1.55; -webkit-text-size-adjust:100%; }
+  main { max-width:680px; margin:0 auto; padding:28px 16px 80px; }
+  .eyebrow { color:var(--acc); font-weight:700; font-size:13px; letter-spacing:.04em; }
+  h1 { font-size:26px; margin:6px 0 10px; line-height:1.3; }
+  .lead { color:var(--sub); margin:0 0 20px; font-size:15px; }
+  .q { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 18px; margin:14px 0; }
+  .q.bad { border-color:var(--err); }
+  .q h2 { font-size:16px; margin:0 0 4px; }
+  .q h2 .req { color:var(--acc); margin-left:4px; }
+  .q .hint { color:var(--sub); font-size:13px; margin:0 0 12px; }
+  .scale { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+  .scale label, .chips label { cursor:pointer; }
+  .scale input, .chips input { position:absolute; opacity:0; pointer-events:none; }
+  .scale span { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:52px; border:1px solid var(--line); border-radius:12px; font-weight:700; font-size:17px; background:#fff; }
+  .scale span small { font-weight:500; font-size:10.5px; color:var(--sub); margin-top:2px; }
+  .scale input:checked + span, .chips input:checked + span { background:var(--acc); border-color:var(--acc); color:#fff; }
+  .scale input:checked + span small { color:#fff; }
+  .scale input:focus-visible + span, .chips input:focus-visible + span { outline:2px solid var(--acc); outline-offset:2px; }
+  .row { padding:12px 0; border-top:1px dashed var(--line); }
+  .row:first-of-type { border-top:0; padding-top:4px; }
+  .row .t { font-weight:600; font-size:14.5px; margin-bottom:8px; }
+  .row .t em { font-style:normal; color:var(--sub); font-weight:500; font-size:12.5px; margin-left:6px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chips span { display:inline-block; padding:9px 14px; border:1px solid var(--line); border-radius:999px; font-size:14px; background:#fff; }
+  textarea { width:100%; min-height:84px; border:1px solid var(--line); border-radius:12px; padding:12px; font:inherit; font-size:15px; resize:vertical; }
+  textarea:focus, input.txt:focus { outline:2px solid var(--acc); border-color:var(--acc); }
+  input.txt { width:100%; border:1px solid var(--line); border-radius:12px; padding:12px; font:inherit; font-size:16px; }
+  .count { text-align:right; color:var(--sub); font-size:12px; margin-top:4px; }
+  .sec { margin:30px 0 4px; font-weight:800; font-size:14px; color:var(--sub); letter-spacing:.02em; }
+  button.submit { width:100%; margin-top:20px; padding:16px; border:0; border-radius:14px; background:var(--ink); color:#fff; font:inherit; font-size:17px; font-weight:700; cursor:pointer; }
+  button.submit:disabled { opacity:.5; cursor:default; }
+  .msg { margin-top:12px; text-align:center; font-size:14px; color:var(--err); min-height:20px; }
+  .done { text-align:center; padding:60px 10px; }
+  .done .big { font-size:48px; }
+  .done h1 { margin-top:10px; }
+  .demo { background:#fff6d6; border:1px solid #f0d77a; border-radius:10px; padding:8px 12px; font-size:13px; margin-bottom:12px; }
+  .progress { position:sticky; top:0; z-index:5; height:4px; background:var(--line); margin:0 -16px 18px; }
+  .progress i { display:block; height:100%; width:0; background:var(--acc); transition:width .2s; }
+  @media (max-width:420px) { .scale span { min-height:46px; font-size:15px; } .scale span small { font-size:9.5px; } h1 { font-size:22px; } }
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+// ── 설정 ───────────────────────────────────────────────
+// Apps Script 웹 앱 URL(…/exec). 비어 있으면 미리보기 모드(응답은 이 브라우저에만 저장).
+const API_URL = 'https://script.google.com/macros/s/AKfycby9WLwP04sQXQQxU7hWTHwfSAGqHbKUSGV8w08x_ztsaXVT7Z0agif6QNtBGIpxe-JhOQ/exec';
+const SURVEY_ID = 'workshop-2026';
+
+const SCALE5 = ['매우 불만족', '불만족', '보통', '만족', '매우 만족'];
+const AGREE5 = ['전혀 아니다', '아니다', '보통', '그렇다', '매우 그렇다'];
+
+// 문항. id 는 시트 열 이름(code.gs 의 QIDS 와 같게). 약 5분.
+const QUESTIONS = [
+  { id: 'name', type: 'input', req: true, max: 20, title: '이름', hint: '실명으로 받아요. 다시 제출하면 마지막 응답으로 바뀌어요', placeholder: '예: 김예람' },
+  { id: 'dept', type: 'chips', req: true, title: '소속 팀', options: ['GULGANG', '미뇽맨션', '바쏠', '휴그', '퓌라', '그로스팀', '경영팀', '구매팀', '발주팀', 'CEO실'] },
+  { sec: '워크숍 전체' },
+  { id: 'overall', type: 'scale', req: true, title: '이번 워크숍에 전반적으로 얼마나 만족하셨나요?', labels: SCALE5 },
+  { id: 'align', type: 'scale', req: true, title: '워크숍을 마치고, 회사와 우리 팀의 목표가 더 분명해졌나요?', hint: '12월 말 필사즉생 목표, 팀 핵심 과제, 내 실행안 기준으로 답해 주세요', labels: AGREE5 },
+  { id: 'prog', type: 'matrix', req: true, title: '프로그램별로 얼마나 만족하셨나요?',
+    rows: [
+      ['p_ceo', '대표님 연사', '10/22 11:00'],
+      ['p_yuri', '김유리 대표님 조직문화 강연', '10/22 13:40'],
+      ['p_mgmt', '경영팀 프로그램', '필사즉생 목표 · 팀 핵심 과제 · 내 실행안'],
+      ['p_bowling', '볼링 "대표님을 이겨라"', ''],
+      ['p_award', 'AX 해커톤 시연 · 시상식', '10/23 13:30']
+    ] },
+  { sec: '대표님 연사' },
+  { id: 'ceo_memo', type: 'text', req: true, max: 300, title: '대표님 연사에서 가장 기억에 남는 한 마디나 내용은 무엇인가요?' },
+  { id: 'ceo_review', type: 'text', req: true, max: 300, title: '대표님 연사 한 줄 후기를 남겨 주세요' },
+  { sec: '김유리 대표님 강연' },
+  { id: 'yuri_memo', type: 'text', req: true, max: 300, title: '강연에서 가장 기억에 남는 한 마디나 내용은 무엇인가요?' },
+  { id: 'yuri_review', type: 'text', req: true, max: 300, title: '강연 한 줄 후기를 남겨 주세요' },
+  { sec: 'AX 해커톤 (10/21)' },
+  { id: 'hk_overall', type: 'scale', req: true, title: 'AX 해커톤에 전반적으로 얼마나 만족하셨나요?', labels: SCALE5 },
+  { id: 'hk_parts', type: 'matrix', req: true, title: '해커톤 운영을 항목별로 평가해 주세요',
+    rows: [
+      ['hk_guide', '사전 안내', '주제 · 규칙 · 일정 공지, 개막식'],
+      ['hk_support', '서포터 지원', 'AI 질문 응대 · 브랜드 공식 계정 업로드'],
+      ['hk_tools', 'AI 툴 지원', '클로드 계정 · 힉스필드 등 추가 결제'],
+      ['hk_page', '제출 페이지', '출품 · 임팩트 기입 · 투표']
+    ] },
+  { id: 'hk_ai', type: 'scale', req: true, title: '해커톤 뒤로, 내 업무에 AI를 더 쓰게 될 것 같나요?', labels: AGREE5 },
+  { id: 'hk_tools_used', type: 'multi', req: true, title: '해커톤에서 주로 쓴 AI 툴을 모두 골라 주세요', options: ['Claude', 'ChatGPT', 'Gemini', '힉스필드', '미드저니', '그 밖의 툴'] },
+  { id: 'hk_review', type: 'text', req: true, max: 500, title: 'AX 해커톤은 어떠셨나요? 총평을 자유롭게 남겨 주세요', hint: '좋았던 점 · 힘들었던 점 · 느낀 점 무엇이든' },
+  { id: 'hk_next', type: 'text', req: true, max: 500, title: '다음 해커톤에서 바뀌었으면 하는 점이나 바라는 점을 알려 주세요', hint: '주제 · 시간 · 평가 방식 · 지원 등 무엇이든' },
+  { sec: '운영과 다음 워크숍' },
+  { id: 'ops', type: 'scale', req: true, title: '운영(이동 · 숙소 · 식사 · 일정 안내)에 얼마나 만족하셨나요?', labels: SCALE5 },
+  { id: 'best', type: 'text', req: true, max: 500, title: '가장 좋았던 점은 무엇인가요?' },
+  { id: 'improve', type: 'text', req: true, max: 500, title: '아쉬웠던 점, 다음 워크숍에서 바뀌었으면 하는 점을 알려 주세요' }
+];
+
+// ── 화면 ───────────────────────────────────────────────
+const DEMO = !API_URL || new URLSearchParams(location.search).has('demo');
+const DONE_KEY = 'wsv_done_' + SURVEY_ID;
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+function scaleHtml(name, labels) {
+  return '<div class="scale" role="radiogroup">' + labels.map((l, i) =>
+    `<label><input type="radio" name="${name}" value="${i + 1}"><span>${i + 1}<small>${esc(l)}</small></span></label>`).join('') + '</div>';
+}
+function chipsHtml(name, options) {
+  return '<div class="chips" role="radiogroup">' + options.map(o =>
+    `<label><input type="radio" name="${name}" value="${esc(o)}"><span>${esc(o)}</span></label>`).join('') + '</div>';
+}
+
+function render() {
+  if (store.get(DONE_KEY)) return renderDone(true);
+  let html = (DEMO ? '<div class="demo">미리보기 모드 — 응답이 서버로 가지 않고 이 브라우저에만 저장돼요.</div>' : '') +
+    '<div class="progress"><i id="bar"></i></div>' +
+    '<div class="eyebrow">EGOIDSM WORKSHOP 2026</div><h1>워크숍 만족도 설문</h1>' +
+    '<p class="lead">10/22~23 곤지암 워크숍, 함께해 주셔서 감사합니다.<br>7분 정도면 끝나요. 남겨 주신 의견은 다음 워크숍과 해커톤을 더 좋게 만드는 데 쓸게요.</p>';
+  for (const q of QUESTIONS) {
+    if (q.sec) { html += `<div class="sec">${esc(q.sec)}</div>`; continue; }
+    html += `<section class="q" data-q="${q.id}"><h2>${esc(q.title)}${q.req ? '<span class="req">*</span>' : ''}</h2>` + (q.hint ? `<p class="hint">${esc(q.hint)}</p>` : '');
+    if (q.type === 'input') html += `<input type="text" class="txt" name="${q.id}" maxlength="${q.max}" placeholder="${esc(q.placeholder || '')}" autocomplete="name">`;
+    if (q.type === 'scale') html += scaleHtml(q.id, q.labels);
+    if (q.type === 'chips') html += chipsHtml(q.id, q.options);
+    if (q.type === 'text') html += `<textarea name="${q.id}" maxlength="${q.max}" placeholder="짧게라도 꼭 적어 주세요"></textarea><div class="count"><span>0</span> / ${q.max}</div>`;
+    if (q.type === 'matrix') html += q.rows.map(([rid, t, sub]) =>
+      `<div class="row" data-row="${rid}"><div class="t">${esc(t)}${sub ? `<em>${esc(sub)}</em>` : ''}</div>` +
+      scaleHtml(rid, SCALE5) + '</div>').join('');
+    if (q.type === 'multi') html += '<div class="chips">' + q.options.map(o =>
+      `<label><input type="checkbox" name="${q.id}" value="${esc(o)}"><span>${esc(o)}</span></label>`).join('') + '</div>';
+    html += '</section>';
+  }
+  html += '<button class="submit" id="submit">제출하기</button><div class="msg" id="msg"></div>';
+  $('#app').innerHTML = html;
+  $('#app').addEventListener('input', onInput);
+  $('#app').addEventListener('change', onInput);
+  $('#submit').addEventListener('click', submit);
+  onInput();
+}
+
+function onInput(e) {
+  if (e && e.target.tagName === 'TEXTAREA') e.target.nextElementSibling.firstElementChild.textContent = e.target.value.length;
+  if (e && e.target.closest('.q')) e.target.closest('.q').classList.remove('bad');
+  const reqs = requiredNames();
+  const filled = reqs.filter(isFilled).length;
+  $('#bar').style.width = Math.round(filled / reqs.length * 100) + '%';
+}
+function isFilled(n) {
+  const t = document.querySelector(`input[type="text"][name="${n}"], textarea[name="${n}"]`);
+  if (t) return t.value.trim().length > 0;
+  return !!document.querySelector(`input[name="${n}"]:checked`);
+}
+function requiredNames() {
+  const out = [];
+  for (const q of QUESTIONS) {
+    if (!q.req) continue;
+    if (q.type === 'matrix') q.rows.forEach(r => out.push(r[0])); else out.push(q.id);
+  }
+  return out;
+}
+
+function collect() {
+  const ans = {};
+  for (const q of QUESTIONS) {
+    if (q.sec) continue;
+    if (q.type === 'matrix') { q.rows.forEach(([rid]) => { const v = document.querySelector(`input[name="${rid}"]:checked`); ans[rid] = v ? v.value : ''; }); continue; }
+    if (q.type === 'text') { ans[q.id] = $(`textarea[name="${q.id}"]`).value.trim(); continue; }
+    if (q.type === 'input') { ans[q.id] = $(`input[name="${q.id}"]`).value.trim().replace(/\s+/g, ' '); continue; }
+    if (q.type === 'multi') { ans[q.id] = [...document.querySelectorAll(`input[name="${q.id}"]:checked`)].map(x => x.value).join(' | '); continue; }
+    const v = document.querySelector(`input[name="${q.id}"]:checked`); ans[q.id] = v ? v.value : '';
+  }
+  return ans;
+}
+
+async function submit() {
+  const msg = $('#msg'); msg.textContent = '';
+  const missing = requiredNames().filter(n => !isFilled(n));
+  if (missing.length) {
+    const first = missing[0];
+    const box = document.querySelector(`[data-q="${first}"]`) || document.querySelector(`[data-row="${first}"]`).closest('.q');
+    document.querySelectorAll('.q').forEach(el => el.classList.remove('bad'));
+    missing.forEach(n => { const b = document.querySelector(`[data-q="${n}"]`) || document.querySelector(`[data-row="${n}"]`)?.closest('.q'); if (b) b.classList.add('bad'); });
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    msg.textContent = '* 표시 문항에 모두 답해 주세요 (' + missing.length + '개 남음)';
+    return;
+  }
+  const btn = $('#submit'); btn.disabled = true; btn.textContent = '보내는 중…';
+  const body = { action: 'submit', survey: SURVEY_ID, answers: collect() };
+  try {
+    if (DEMO) {
+      const all = JSON.parse(store.get('wsv_demo') || '[]'); all.push({ at: new Date().toISOString(), ...body.answers }); store.set('wsv_demo', JSON.stringify(all));
+      await new Promise(r => setTimeout(r, 400));
+    } else {
+      const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow' });
+      const j = JSON.parse(await r.text());
+      if (!j.ok) throw new Error(j.error || '저장하지 못했어요');
+    }
+    store.set(DONE_KEY, '1');
+    renderDone(false);
+  } catch (err) {
+    btn.disabled = false; btn.textContent = '제출하기';
+    msg.textContent = '저장하지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요. (' + (err.message || err) + ')';
+  }
+}
+
+function renderDone(already) {
+  $('#app').innerHTML = '<div class="done"><div class="big">🙌</div><h1>' + (already ? '이미 제출하셨어요' : '제출 완료! 감사합니다') + '</h1>' +
+    '<p class="lead">소중한 의견은 다음 워크숍을 준비하는 데 꼭 반영할게요.</p>' +
+    (already ? '<p class="lead" style="font-size:13px">다시 작성하려면 <a href="#" id="again">여기</a>를 눌러 주세요.</p>' : '') + '</div>';
+  window.scrollTo(0, 0);
+  const a = $('#again'); if (a) a.addEventListener('click', e => { e.preventDefault(); try { localStorage.removeItem(DONE_KEY); } catch {} render(); });
+}
+
+render();
+</script>
+</body>
+</html>
