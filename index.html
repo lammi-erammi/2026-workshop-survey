@@ -70,6 +70,8 @@
   .ans li { padding:10px 0; border-top:1px solid var(--line); font-size:14px; white-space:pre-wrap; }
   .ans li:first-child { border-top:0; }
   .ans .who { color:var(--sub); font-size:12px; display:block; margin-bottom:2px; white-space:normal; }
+  .ans .ko { display:block; margin-top:6px; padding-left:10px; border-left:2px solid var(--line); color:var(--sub); font-size:13px; }
+  .ans .ko b { display:block; font-size:11px; font-weight:600; }
   details.card > summary { cursor:pointer; font-weight:700; font-size:15px; list-style:none; }
   details.card > summary::after { content:' ▾'; color:var(--sub); }
   details.card[open] > summary { margin-bottom:10px; }
@@ -252,7 +254,7 @@ function renderDone(already) {
 // 팀 인원: 경영팀 프로그램 설정의 팀별 예상 인원(10/26)
 const TEAM_SIZE = { 'GULGANG': 9, '미뇽맨션': 4, '바쏠': 3, '휴그': 5, '퓌라': 5, '그로스팀': 6, '경영팀': 4, '구매팀': 7, '발주팀': 2, 'CEO실': 2 };
 const KEY_STORE = 'wsv_results_key';
-const RS = { rows: [], at: '', team: '' };
+const RS = { rows: [], at: '', team: '', koFail: 0 };
 const sget = k => { try { return sessionStorage.getItem(k) || ''; } catch { return ''; } };
 const sset = (k, v) => { try { v ? sessionStorage.setItem(k, v) : sessionStorage.removeItem(k); } catch {} };
 
@@ -270,7 +272,7 @@ async function loadResults(key) {
   const r = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'results', key }), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, redirect: 'follow' });
   const j = JSON.parse(await r.text());
   if (!j.ok) throw new Error(j.error || '불러오지 못했어요');
-  RS.rows = j.rows; RS.at = j.at;
+  RS.rows = j.rows; RS.at = j.at; RS.koFail = j.koFail || 0;
 }
 
 function renderLogin(err) {
@@ -316,11 +318,11 @@ function renderResults() {
   const texts = QUESTIONS.filter(q => q.type === 'text').map(q => {
     const list = rows.filter(r => String(r[q.id] || '').trim());
     return `<details class="card"${list.length ? '' : ''}><summary>${esc(q.title)} <span style="color:var(--sub);font-weight:500">(${list.length})</span></summary><ul class="ans">` +
-      list.map(r => `<li><span class="who">${esc(r.name)} · ${esc(r.dept || '팀 미선택')}</span>${esc(r[q.id])}</li>`).join('') + '</ul></details>';
+      list.map(r => `<li><span class="who">${esc(r.name)} · ${esc(r.dept || '팀 미선택')}</span>${esc(r[q.id])}${r[q.id + '_ko'] ? `<span class="ko"><b>한국어 자동 번역</b>${esc(r[q.id + '_ko'])}</span>` : ''}</li>`).join('') + '</ul></details>';
   }).join('');
   const at = RS.at ? new Date(RS.at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '';
   $('#app').innerHTML = (DEMO ? '<div class="demo">미리보기 모드 — 이 브라우저에 저장된 응답이에요.</div>' : '') +
-    `<div class="rs-top"><div><div class="eyebrow">EGOIDSM WORKSHOP 2026</div><h1 style="margin:4px 0">설문 결과</h1><div class="hint" style="color:var(--sub);font-size:13px">${esc(at)} 기준 · 실명 응답 — 화면 공유·캡처 주의</div></div>
+    `<div class="rs-top"><div><div class="eyebrow">EGOIDSM WORKSHOP 2026</div><h1 style="margin:4px 0">설문 결과</h1><div class="hint" style="color:var(--sub);font-size:13px">${esc(at)} 기준 · 실명 응답 — 화면 공유·캡처 주의${RS.koFail ? ` · 번역 안 된 답 ${RS.koFail}개(새로 고침하면 다시 시도)` : ''}</div></div>
     <div class="tools"><select class="btn" id="team"><option value="">전체 팀</option>${Object.keys(TEAM_SIZE).map(t => `<option${t === RS.team ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
     <button class="btn" id="reload">새로 고침</button><button class="btn" id="csv">CSV 받기</button><button class="btn" id="out">나가기</button></div></div>
     <div class="kpis">
@@ -342,9 +344,9 @@ function renderResults() {
 
 function downloadCsv() {
   const cols = ['submittedAt', 'name', 'dept'];
-  for (const q of QUESTIONS) { if (q.id === 'name' || q.id === 'dept') continue; if (q.type === 'matrix') q.rows.forEach(r => cols.push(r[0])); else cols.push(q.id); }
+  for (const q of QUESTIONS) { if (q.id === 'name' || q.id === 'dept') continue; if (q.type === 'matrix') q.rows.forEach(r => cols.push(r[0])); else cols.push(q.id); if (q.type === 'text') cols.push(q.id + '_ko'); }
   const cell = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const csv = '﻿' + [cols.join(',')].concat(RS.rows.map(r => cols.map(c => cell(r[c] ?? r.at)).join(','))).join('\r\n');
+  const csv = '﻿' + [cols.join(',')].concat(RS.rows.map(r => cols.map(c => cell(c === 'submittedAt' ? r[c] ?? r.at : r[c])).join(','))).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = '워크숍_만족도_설문_결과.csv'; a.click();
